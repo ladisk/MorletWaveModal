@@ -18,7 +18,7 @@ class MorletWaveModal(object):
         :param fs:  frequency of sampling
         :return:
         """
-        self.damp_lim = (0.0001, 0.02)
+        self.damp_lim = (0.0002, 0.02)
         self.free_response = free_response
         self.fs = fs
         self.omega_init = omega
@@ -40,10 +40,10 @@ class MorletWaveModal(object):
     def identify_damping(self, find_natural_freq=True):
 
         if find_natural_freq:
-            omega_id = self.find_natural_frequencies()
-            N_hi = self.max_N(self.k[-1], np.min(omega_id), self.fs)
+            self.omega_id = self.find_natural_frequencies()
+            N_hi = self.max_N(self.k[-1], np.min(self.omega_id), self.fs)
         else:
-            N_hi = self.max_N(self.k[-1], self.omega, self.fs)
+            N_hi = self.max_N(self.k[-1], self.omega_init, self.fs)
 
         N_k = self.k.size
         psi = np.zeros((N_hi, N_k), dtype=np.complex128)
@@ -51,8 +51,9 @@ class MorletWaveModal(object):
         for j, n_ in enumerate((self.n_1, self.n_2)):
             for i, k_ in enumerate(self.k):
                 if find_natural_freq:
-                    w = omega_id[i]
+                    w = self.omega_id[i]
                 else:
+                    self.omega_id = np.full(self.k.size, self.omega_init)
                     w = self.omega_init
                 psi_N = self.max_N(k_, w, self.fs)
                 psi[:psi_N, i] = self.morlet_wave(self.fs, w, k_, n_)
@@ -76,12 +77,10 @@ class MorletWaveModal(object):
             args=(self.k[self.mask], self.n_1, self.n_2, integral_ratio[self.mask]), \
                 method='Bounded')
         
-        if find_natural_freq:
-            omega_identified = np.mean(omega_id[self.mask])
-            return damp.x, omega_identified
-        return damp.x
+        omega_identified = np.mean(self.omega_id[self.mask])
+        return damp.x, omega_identified
 
-    def identify_amp_pha(self, damping, omega):
+    def identify_amp_pha(self, damping):
 
         ######### Amplitude #########
         def amplitude_goal_fun(amp, omega, damp, k, n, I_num):
@@ -93,10 +92,11 @@ class MorletWaveModal(object):
             # return np.sum(np.abs(I_anl_abs - np.abs(I_num)) / I_anl_abs)
             return np.sum(np.square(I_anl_abs - np.abs(I_num)))
 
-        amp_test = self.get_amplitude(self.k[self.mask], self.n_1, damping, omega, \
-            self.integral[0, self.mask])
+        amp_test = self.get_amplitude(self.k[self.mask], self.n_1, damping, \
+            self.omega_id[self.mask], self.integral[0, self.mask])
         amp = minimize(fun=amplitude_goal_fun, x0=np.max(amp_test), \
-            args=(omega, damping, self.k[self.mask], self.n_1, self.integral[0, self.mask]))
+            args=(self.omega_id[self.mask], damping, self.k[self.mask], self.n_1, \
+                self.integral[0, self.mask]))
 
         ######### Phase #########
         def phase_goal_fun(phase, k, I_num):
@@ -215,14 +215,14 @@ if __name__ == "__main__":
     free_response = np.cos(wd*t - pha) * np.exp(-damping_ratio*w*t) * amplitude
 
 # Initialize MorletWaveModal
-    identifier = MorletWaveModal(free_response=free_response, fs=fs, omega=w+1, k_lo=6, k_hi=k_hi)
+    identifier = MorletWaveModal(free_response=free_response, fs=fs, omega=w+3.14, k_lo=10, k_hi=k_hi)
 
 # Identify damping and natural frequency
-    damping, omega = identifier.identify_damping()
-    print(f'Natural frequency:\n\tTheorethical: {w/(2*np.pi)} Hz\n\tIdentified: {np.around(omega/(2*np.pi), 2)} Hz')
-    print(f'Damping ratio:\n\tTheorethical: {damping_ratio*100}%\n\tIdentified: {np.around(damping*100, 4)}%')
+    damping, omega = identifier.identify_damping(True)
+    print(f'Natural frequency:\n\tTheorethical: {w/(2*np.pi)} Hz\n\tIdentified: {omega/(2*np.pi):.2f} Hz')
+    print(f'Damping ratio:\n\tTheorethical: {damping_ratio*100}%\n\tIdentified: {damping*100:.4f}%')
 
 # Identify amplitude and phase
-    amp, phi = identifier.identify_amp_pha(damping, omega)
-    print(f'Amplitude:\n\tTheorethical: {amplitude}\n\tIdentified: {np.around(amp, 2)}')
-    print(f'Phase:\n\tTheorethical: {np.around(np.rad2deg(pha), 2)} deg\n\tIdentified: {np.around(np.rad2deg(phi), 2)} deg')
+    amp, phi = identifier.identify_amp_pha(damping)
+    print(f'Amplitude:\n\tTheorethical: {amplitude}\n\tIdentified: {amp:.2f}')
+    print(f'Phase:\n\tTheorethical: {np.rad2deg(pha):.2f} deg\n\tIdentified: {np.rad2deg(phi):.2f} deg')

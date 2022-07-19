@@ -7,7 +7,7 @@ base_path = os.path.dirname(__file__)
 # Read the project version from "__init__.py"
 regexp = re.compile(r'.*__version__ = [\'\"](.*?)[\'\"]', re.S)
 
-init_file = os.path.join(base_path, 'mwdi', '__init__.py')
+init_file = os.path.join(base_path, 'mw_modal', '__init__.py')
 with open(init_file, 'r') as f:
     module_content = f.read()
 
@@ -37,11 +37,11 @@ requirements = parse_requirements('requirements.txt')
 
 if __name__ == '__main__':
     setup(
-        name='MWModal',
+        name='MorletWaveModal',
         description='Morlet Wave Modal Identification.',
         long_description=readme,
         license='MIT license',
-        url='https://github.com/ladisk/mwdi',
+        url='https://github.com/ladisk/MorletWaveModal',
         version=version,
         author='Ivan Tomac, Janko Slavič',
         author_email='ivan.tomac@fs.uni-lj.si, janko.slavic@fs.uni-lj.si',
@@ -49,7 +49,7 @@ if __name__ == '__main__':
         maintainer_email='janko.slavic@fs.uni-lj.si',
         install_requires=requirements,
         keywords=['modal parameters, morlet-wave, identification'],
-        packages=['mwmodal'],
+        packages=['mw_modal'],
         classifiers=[
             'Development Status :: 3 - Alpha',
             'Intended Audience :: Developers',

@@ -1,4 +1,5 @@
 numpy
 scipy
+mwdi
 pylint
 pytest
