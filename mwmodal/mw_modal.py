@@ -29,6 +29,7 @@ class MorletWaveModal(object):
         self.num_k = num_k
         self.omega_id = None
         
+        self.identifier_morlet_wave = mw.MorletWave(self.free_response, self.fs)
         return None
 
     def identify_natural_frequency(self, omega):
@@ -51,10 +52,12 @@ class MorletWaveModal(object):
         return omega_identified
 
     def identify_damping(self):
+        
         if self.omega_id is None:
             raise Exception(f'Natural frequencies not identified.')
 
-        damp = least_squares(cost_fun_damping, x0=0.001, method='lm', \
+        damp = least_squares(self.identifier_morlet_wave.exact_mwdi_goal_function, \
+            x0=0.001, method='lm', \
             args=(self.integral_ratio[self.mask], self.n_1, self.n_2, self.k[self.mask]))
 
         if not(damp.success):
@@ -92,10 +95,10 @@ class MorletWaveModal(object):
         #     else:
         #         ph = np.nan
         phi_test = 0.1
-        phase = least_squares(cost_fun_phase, x0=phi_test, method='trf', bounds=(-np.pi, np.pi),  \
+        phase = least_squares(cost_fun_phase, x0=phi_test, method='trf', bounds=(-np.pi, np.pi), \
                     args=(self.k[self.mask], np.angle(self.integral[0, self.mask])))
         if phase.cost > 1:
-            phase = least_squares(cost_fun_phase, x0=-phi_test, method='trf', bounds=(-np.pi, np.pi),  \
+            phase = least_squares(cost_fun_phase, x0=-phi_test, method='trf', bounds=(-np.pi, np.pi), \
                     args=(self.k[self.mask], np.angle(self.integral[0, self.mask])))
         if not(phase.success):
             raise Exception(f'Optimizer returned false for phase:\nAmplitude: {amp.x[0]}\n{phase.message}.')
@@ -103,10 +106,9 @@ class MorletWaveModal(object):
         return amp.x[0], phase.x[0]
 
     def find_natural_frequencies(self, omega):
-        identifier = mw.MorletWave(self.free_response, self.fs)
         self.omega_id = np.zeros_like(self.k, dtype=float)        
         for i, k_ in enumerate(self.k):
-            self.omega_id[i] = identifier.find_natural_frequency(omega, self.n_1, k_)
+            self.omega_id[i] = self.identifier_morlet_wave.find_natural_frequency(omega, self.n_1, k_)
         return None
 
     def morlet_wave_integrate(self):
@@ -120,7 +122,8 @@ class MorletWaveModal(object):
         for j, n_ in enumerate((self.n_1, self.n_2)):
             for i, k_ in enumerate(self.k):
                 psi_N = max_N(k_, self.omega_id[i], self.fs)
-                psi[:psi_N, i] = morlet_wave(self.fs, self.omega_id[i], k_, n_)
+                # psi[:psi_N, i] = morlet_wave(self.fs, self.omega_id[i], k_, n_)
+                psi[:psi_N, i] = self.identifier_morlet_wave.morlet_wave(self.omega_id[i], n_, k_)
 
             self.integral[j,] = \
                 np.trapz(np.einsum('i,ij->ij', self.free_response[:N_hi], np.conj(psi)), \
@@ -137,39 +140,15 @@ class MorletWaveModal(object):
         k_lim = int(k_limit_theoretical(self.n_1, self.damp_lim[1]))
         for i, k_ in enumerate(self.k):
             if k_ <= k_lim:
-                test = cost_fun_damping(self.damp_lim[1], 0, self.n_1, self.n_2, k_)
+                test = self.identifier_morlet_wave.exact_mwdi_goal_function(self.damp_lim[1], 0, self.n_1, self.n_2, k_)
                 if M_tilde[i] > test:
                     M_tilde[i] = 1
         d_lim = damping_limit_theoretical(self.n_1, self.k_hi)
         # M_lim_lo = low_M_limit((self.n_1, self.n_2))
-        M_lim_lo = cost_fun_damping(self.damp_lim[0], 0, self.n_1, self.n_2, self.k_lo)
-        M_lim_hi = cost_fun_damping(d_lim, 0, self.n_1, self.n_2, self.k_hi)
+        M_lim_lo = self.identifier_morlet_wave.exact_mwdi_goal_function(self.damp_lim[0], 0, self.n_1, self.n_2, self.k_lo)
+        M_lim_hi = self.identifier_morlet_wave.exact_mwdi_goal_function(d_lim, 0, self.n_1, self.n_2, self.k_hi)
         mask = np.logical_and(M_tilde > M_lim_lo, M_tilde < M_lim_hi)
         return mask
-
-def morlet_wave(fs, omega, k, n):
-    """
-    Function generates Morlet-Wave basic wavelet function on the circular 
-    frequency `omega` with `k` cycles and `n` time spread.
-    
-    :param fs: sampling frequency (S/s)
-    :param omega: circular frequency (rad/s)
-    :param k: number of oscillations
-    :param n: time-spread parameter
-    :return:
-    Source: 200 - Generate Morlet-Wave numerically - FUNCTION.ipynb
-    Date: petek, 18. marec 2022 13:52:07
-    """
-    eta = 2 * k * np.pi * np.sqrt(2) / n
-    s = eta / omega
-    T = 2 * k * np.pi / omega
-    N = int(fs * T) + 1
-    
-    t = np.arange(N) / fs
-    t -= 0.5 * T
-    t /= s
-    
-    return np.pi**-0.25 * s**-0.5 * np.exp(-0.5*t**2 + 1j*eta*t)
 
 def damping_limit_theoretical(n, k):
     kapa = 8*np.pi*k / n**2
@@ -185,23 +164,8 @@ def k_limit_theoretical(n, d):
     kapa = n**2 / (8*np.pi*d)
     return kapa * np.sqrt(1 - d**2)
 
-# def low_M_limit(n):
-#     return erf(0.25*n[0]) / erf(0.25*n[1]) * np.sqrt(n[1] / n[0])
-
 def max_N(k_max, omega, fs):
     return int(2 * k_max * np.pi / omega * fs) + 1
-
-def cost_fun_damping(damp, M_tilde, n_1, n_2, k):  # vektoriziran za eMW2
-    const = 2 * k * np.pi * damp / np.sqrt(1 - damp**2)
-    n = np.array([n_1, n_2], dtype=object)
-    g_1 = 0.25 * n
-    g_2_0 = const / n[0]
-    g_2_1 = const / n[1]
-    err = erf(g_1[0] - g_2_0) + erf(g_1[0] + g_2_0)
-    err /=erf(g_1[1] - g_2_1) + erf(g_1[1] + g_2_1)
-    g_2_0 /= n[0]
-    g_2_1 /= n[1]
-    return np.sqrt(n_2 / n_1) * np.exp(g_2_0 * g_2_1 * (n_2**2 - n_1**2)) * err - M_tilde
 
 def get_amplitude(k, n, damp, omega, I_tilde):
     const = (np.pi/2)**0.75 * np.sqrt(k / (n * omega))
@@ -227,7 +191,7 @@ if __name__ == "__main__":
     fs = 10000
     k_hi = 100
     w = 2 * np.pi * 100
-    damping_ratio = 0.01
+    damping_ratio = 0.005
     wd = w * np.sqrt(1 - damping_ratio**2)
     amplitude = 1
     pha = np.deg2rad(np.random.randint(-180, 180))
