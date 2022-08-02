@@ -24,8 +24,6 @@ import mwdi as mw
 from scipy.special import erf
 from scipy.optimize import least_squares
 from warnings import warn
-# from scipy.optimize import minimize_scalar
-# from scipy.optimize import minimize
 
 class MorletWaveModal(object):
 
@@ -86,6 +84,13 @@ class MorletWaveModal(object):
             warn(f'k_lim is adjusted to signal length: {k_lim}.')
             print('k_lim =', k_lim)
 
+        num_k = k_lim - self.k_lo + 1
+        if num_k < self.num_k:
+            if num_k < 3:
+                raise Exception('num_k is too large. Extend k_lo-k_hi range.')
+            else:
+                raise Exception(f'num_k is too large. Extend k_lo-k_hi range or set k_num to {num_k}.')
+
         self.k = np.linspace(self.k_lo, k_lim, self.num_k, dtype=int)
         self.k_hi_used = k_lim # 1.
         if chk_damping:
@@ -110,6 +115,13 @@ class MorletWaveModal(object):
                 k_lim = int(0.9 * k_signal)
                 warn(f'k_lim is adjusted to signal length: {k_lim}.')
                 print('k_lim =', k_lim)
+            
+            num_k = k_lim - self.k_lo + 1
+            if num_k < self.num_k:
+                if num_k < 3:
+                    raise Exception('num_k is too large. Extend k_lo-k_hi range.')
+                else:
+                    raise Exception(f'num_k is too large. Extend k_lo-k_hi range or set k_num to {num_k}.')
 
             self.k = np.linspace(self.k_lo, k_lim, self.num_k, dtype=int)
             self.k_hi_used = k_lim # 2.
@@ -187,41 +199,21 @@ class MorletWaveModal(object):
         ######### Amplitude #########
         amp_test = get_amplitude(self.k[self.mask], self.n_1, damping, \
             self.omega_id[self.mask], self.integral[0, self.mask])
-        amp = least_squares(cost_fun_amplitude, x0=amp_test, method='lm', \
-            args=(self.omega_id[self.mask], damping, self.k[self.mask], self.n_1, \
-                np.abs(self.integral[0, self.mask])))
+        amplitude = least_squares(cost_fun_amplitude, x0=amp_test, method='lm', \
+                        args=(self.omega_id[self.mask], damping, self.k[self.mask], \
+                                self.n_1, np.abs(self.integral[0, self.mask])))
+        if not(amplitude.success):
+            raise Exception(f'Optimizer returned false for amplitude:\n{amplitude.message}.')
 
-        if not(amp.success):
-            raise Exception(f'Optimizer returned false for amplitude:\n{amp.message}.')
-
-        ######### Phase #########
-        # def phase_goal_fun(phase, k, I_num):
-        #     I_anl_arg = np.exp(1j * (np.pi*k - phase))
-        #     return np.sum(np.abs(np.angle(I_anl_arg) - np.angle(I_num)))
-        #     # return np.sum(np.square(np.angle(I_anl_arg) - np.angle(I_num)))
-
-        # pha = minimize(fun=phase_goal_fun, x0=0, \
-        #     args=(self.k[self.mask], self.integral[0, self.mask]), method='Nelder-Mead')
-            
-        # if pha.success and -np.pi <= pha.x[0] <= np.pi:
-        #     ph = pha.x[0]
-        # else:
-        #     pha = minimize_scalar(fun=phase_goal_fun, bounds=(-np.pi, np.pi), \
-        #             args=(self.k[self.mask], self.integral[0, self.mask]), method='Bounded')
-        #     if pha.success:
-        #         ph = pha.x
-        #     else:
-        #         ph = np.nan
-        phi_test = 0.1
+        ######### Phase ###########
+        phi_tilde = -np.angle((-1)**(self.k[self.mask]) * self.integral[0, self.mask])
+        phi_test = np.mean(phi_tilde)
         phase = least_squares(cost_fun_phase, x0=phi_test, method='trf', bounds=(-np.pi, np.pi), \
-                    args=(self.k[self.mask], np.angle(self.integral[0, self.mask])))
-        if phase.cost > 1:
-            phase = least_squares(cost_fun_phase, x0=-phi_test, method='trf', bounds=(-np.pi, np.pi), \
-                    args=(self.k[self.mask], np.angle(self.integral[0, self.mask])))
+                    args=(self.k[self.mask], np.abs(np.tan(phi_test)), phi_tilde))
         if not(phase.success):
-            raise Exception(f'Optimizer returned false for phase:\nAmplitude: {amp.x[0]}\n{phase.message}.')
+            raise Exception(f'Optimizer returned false for phase:\nAmplitude: {amplitude.x[0]}\n{phase.message}.')
 
-        return amp.x[0], phase.x[0]
+        return amplitude.x[0], phase.x[0]
 
     def find_natural_frequencies(self, omega):
         """
@@ -364,25 +356,30 @@ def cost_fun_amplitude(amplitude, omega, damping_ratio, k, n, I_tilde_abs):
     I_abs = norm * np.exp(e_1 * (e_1 - 2*e_2)) * err
     return I_abs - I_tilde_abs
 
-def cost_fun_phase(phase, k, I_tilde_arg):
+def cost_fun_phase(phase, k, test, phi_tilde):
     """
     Cost function for LS minimization of `phase`, Eq.(17).
 
     :param phase: phase of the observed mode
     :param k: number of oscillations
-    :param I_tilde_arg: Argument of the Morlet integral
+    :param test: it is a `np.abs(np.tan(np.mean(phi_tilde)))`
+    :param phi_tilde: signal based phase angle, obtained from argument of Eq.(6)
     :return: difference between theoretical and signal based Morlet integral
-             phase angles.
+             phase angles cosines or sines.
     """
-    I_anl_arg = np.exp(1j * (np.pi*k - phase))
-    return np.angle(I_anl_arg) - I_tilde_arg
+    phi = np.full_like(k, phase, dtype=float)
+    # phi_tilde = -np.angle((-1)**(k) * I_tilde)
+    # test = np.abs(np.tan(np.mean(phi_tilde)))
+    if test > 1:
+        return np.cos(phi) - np.cos(phi_tilde)
+    return np.sin(phi) - np.sin(phi_tilde)
 
 if __name__ == "__main__":
     fs = 10000
     w = 2 * np.pi * 100
     damping_ratio = 0.005
     amplitude = 1
-    pha = np.deg2rad(np.random.randint(-180, 180))
+    pha = np.deg2rad(np.random.default_rng().integers(-180, 180))
     wd = w * np.sqrt(1 - damping_ratio**2)
     t = np.arange(int(0.5*fs)) / fs
     free_response = np.cos(wd*t - pha) * np.exp(-damping_ratio*w*t) * amplitude
