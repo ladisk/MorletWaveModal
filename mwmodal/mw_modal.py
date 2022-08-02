@@ -23,12 +23,13 @@ import mwdi as mw
 
 from scipy.special import erf
 from scipy.optimize import least_squares
+from warnings import warn
 # from scipy.optimize import minimize_scalar
 # from scipy.optimize import minimize
 
 class MorletWaveModal(object):
 
-    def __init__(self, free_response, fs, n_1=5, n_2=10, k_lo=30, k_hi=400, num_k=10):
+    def __init__(self, free_response, fs, n_1=5, n_2=10, k_lo=10, k_hi=400, num_k=10):
         """
         Initiates the MorletWaveModal object
 
@@ -54,6 +55,67 @@ class MorletWaveModal(object):
         self.identifier_morlet_wave = mw.MorletWave(free_response, fs)
         return None
 
+    def initialize_identification(self, omega, damping_estimated=0.0025, chk_damping=True):
+        """
+        Estimates `k_lim` and distributes `k` values in range for selected mode `omega`.
+
+        Method performs distribution of `k` values in range `10 - k_lim`.
+        The `k_lim` is determined according to `damping_estimated` and it is
+        checked against signal length, if it is larger then `k_signal` then
+        it is adjusted to signal, but not above 400. If `chk_damping` is
+        enabled, estimated damping is verified and if higher then 0.0025 
+        `k_lim` is adjusted to identified damping.
+
+        :param omega: roughly estimated natural circular frequency
+        :param damping_estimated: estimated damping ratio
+        :chk_damping: enables/disables verification of estimated damping ratio
+        :return:
+        """
+        self.k_hi = None # legacy: prevents k distribution in identify_natural_frequency()
+
+        N_ef = self.free_response.size
+        k_signal = int(omega * N_ef / (2*np.pi*self.fs))
+        k_lim = int(k_limit_theoretical(self.n_1, damping_estimated) * 1)
+        print('k_lim =', k_lim)
+        if k_lim > 400:
+            k_lim = 400
+            print('k_lim corrected to 400!')
+
+        if k_lim > k_signal:
+            k_lim = int(0.9 * k_signal)
+            warn(f'k_lim is adjusted to signal length: {k_lim}.')
+            print('k_lim =', k_lim)
+
+        self.k = np.linspace(self.k_lo, k_lim, self.num_k, dtype=int)
+        self.k_hi_used = k_lim # 1.
+        if chk_damping:
+            self.find_natural_frequencies(omega)
+            try:
+                self.morlet_wave_integrate(True)
+            except Exception:
+                raise Exception('Increase estimated damping or reduce signal length.')
+            
+            damping_test = self.identify_damping()
+            print(damping_test)
+            if damping_test <= 0.0025:
+                k_lim = 400
+                print('k_lim set to 400!')
+            else:
+                k_lim = int(k_limit_theoretical(self.n_1, damping_test) * 0.8)
+                print('k_lim =', k_lim)
+                if k_lim > 400:
+                    k_lim = 400
+                    print('k_lim corrected to 400!')
+            if k_lim > k_signal:
+                k_lim = int(0.9 * k_signal)
+                warn(f'k_lim is adjusted to signal length: {k_lim}.')
+                print('k_lim =', k_lim)
+
+            self.k = np.linspace(self.k_lo, k_lim, self.num_k, dtype=int)
+            self.k_hi_used = k_lim # 2.
+            self.omega_id = None
+        return None
+
     def identify_natural_frequency(self, omega, test=False):
         """
         Searches for the natural frequencies in `k` values from range.
@@ -70,27 +132,28 @@ class MorletWaveModal(object):
         :param test: parameter passed to `morlet_wave_integrate()` method
         :return: identified natural frequency
         """
-        
-        N_ef = self.free_response.size
-        k_max = int(omega * N_ef / (2*np.pi*self.fs))
-        k_hi = self.k_hi
 
-        if k_hi > k_max:
-            # raise Exception(f'k_hi exceeds the signal length! Reduce k_hi to {int(k_max * 0.9)}.')
-            k_hi = int(k_max * 0.9)
-            # self.num_k = 7
-        num_k = k_hi - self.k_lo + 1
-        if num_k < self.num_k:
-            if num_k < 3:
-                raise Exception('num_k is too large. Extend k_lo-k_hi range.')
-            else:
-                raise Exception(f'num_k is too large. Extend k_lo-k_hi range or set k_num to {num_k}.')
-            # self.num_k = self.k_hi - self.k_lo + 1
+        if self.k_hi is not None:
+            N_ef = self.free_response.size
+            k_max = int(omega * N_ef / (2*np.pi*self.fs))
+            k_hi = self.k_hi
 
-        self.k = np.linspace(self.k_lo, k_hi, self.num_k, dtype=int)
+            if k_hi > k_max:
+                # raise Exception(f'k_hi exceeds the signal length! Reduce k_hi to {int(k_max * 0.9)}.')
+                k_hi = int(k_max * 0.9)
+                # self.num_k = 7
+            num_k = k_hi - self.k_lo + 1
+            if num_k < self.num_k:
+                if num_k < 3:
+                    raise Exception('num_k is too large. Extend k_lo-k_hi range.')
+                else:
+                    raise Exception(f'num_k is too large. Extend k_lo-k_hi range or set k_num to {num_k}.')
+                # self.num_k = self.k_hi - self.k_lo + 1
+
+            self.k = np.linspace(self.k_lo, k_hi, self.num_k, dtype=int)
+            self.k_hi_used = k_hi
 
         self.find_natural_frequencies(omega)
-        self.k_hi_used = k_hi
         self.morlet_wave_integrate(test)
 
         omega_identified = np.average(self.omega_id[self.mask], weights=self.k[self.mask])
@@ -212,7 +275,7 @@ class MorletWaveModal(object):
         :param M_tilde: morlet integral ratios in `k` range.
         :return: mask which filters out values that do not satisfy set conditions.
         """
-        k_lim = int(k_limit_theoretical(self.n_1, self.damp_lim[1]))
+        k_lim = k_limit_theoretical(self.n_1, self.damp_lim[1])
         for i, k_ in enumerate(self.k):
             if k_ <= k_lim:
                 test = self.identifier_morlet_wave.exact_mwdi_goal_function(self.damp_lim[1], 0, self.n_1, self.n_2, k_)
@@ -250,7 +313,7 @@ def k_limit_theoretical(n, d):
     :return: number of oscillations
     """
     kapa = n**2 / (8*np.pi*d)
-    return kapa * np.sqrt(1 - d**2)
+    return int(kapa * np.sqrt(1 - d**2))
 
 def max_N(k, omega, fs):
     """
@@ -318,16 +381,16 @@ if __name__ == "__main__":
     fs = 10000
     w = 2 * np.pi * 100
     damping_ratio = 0.005
-    wd = w * np.sqrt(1 - damping_ratio**2)
     amplitude = 1
     pha = np.deg2rad(np.random.randint(-180, 180))
+    wd = w * np.sqrt(1 - damping_ratio**2)
     t = np.arange(int(0.5*fs)) / fs
     free_response = np.cos(wd*t - pha) * np.exp(-damping_ratio*w*t) * amplitude
 
 # Initialize MorletWaveModal
     identifier = MorletWaveModal(free_response=free_response, fs=fs)
 
-# Identify damping and natural frequency
+# Identify natural frequency and damping
     omega = identifier.identify_natural_frequency(omega=w+1)
     damping = identifier.identify_damping()
     print(f'Natural frequency:\n\tTheorethical: {w/(2*np.pi)} Hz\n\tIdentified: {omega/(2*np.pi):.2f} Hz')
