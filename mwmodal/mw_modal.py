@@ -106,7 +106,7 @@ class MorletWaveModal(object):
                 k_lim = 400
                 print('k_lim set to 400!')
             else:
-                k_lim = int(k_limit_theoretical(self.n_1, damping_test) * 0.8)
+                k_lim = int(k_limit_theoretical(self.n_1, damping_test) * 1)
                 print('k_lim =', k_lim)
                 if k_lim > 400:
                     k_lim = 400
@@ -197,8 +197,8 @@ class MorletWaveModal(object):
         """
 
         ######### Amplitude #########
-        amp_test = get_amplitude(self.k[self.mask], self.n_1, damping, \
-            self.omega_id[self.mask], self.integral[0, self.mask])
+        amp_test = np.mean(get_amplitude(self.k[self.mask], self.n_1, damping, \
+                    self.omega_id[self.mask], self.integral[0, self.mask]))
         amplitude = least_squares(cost_fun_amplitude, x0=amp_test, method='lm', \
                         args=(self.omega_id[self.mask], damping, self.k[self.mask], \
                                 self.n_1, np.abs(self.integral[0, self.mask])))
