@@ -74,15 +74,15 @@ class MorletWaveModal(object):
         N_ef = self.free_response.size
         k_signal = int(omega * N_ef / (2*np.pi*self.fs))
         k_lim = int(k_limit_theoretical(self.n_1, damping_estimated) * 1)
-        print('k_lim =', k_lim)
+        # print('k_lim =', k_lim)
         if k_lim > 400:
             k_lim = 400
-            print('k_lim corrected to 400!')
+            # print('k_lim corrected to 400!')
 
         if k_lim > k_signal:
             k_lim = int(0.9 * k_signal)
             warn(f'k_lim is adjusted to signal length: {k_lim}.')
-            print('k_lim =', k_lim)
+            # print('k_lim =', k_lim)
 
         num_k = k_lim - self.k_lo + 1
         if num_k < self.num_k:
@@ -101,20 +101,20 @@ class MorletWaveModal(object):
                 raise Exception('Increase estimated damping or reduce signal length.')
             
             damping_test = self.identify_damping()
-            print(damping_test)
+            # print(damping_test)
             if damping_test <= 0.0025:
                 k_lim = 400
-                print('k_lim set to 400!')
+                # print('k_lim set to 400!')
             else:
                 k_lim = int(k_limit_theoretical(self.n_1, damping_test) * 1)
                 print('k_lim =', k_lim)
                 if k_lim > 400:
                     k_lim = 400
-                    print('k_lim corrected to 400!')
+                    # print('k_lim corrected to 400!')
             if k_lim > k_signal:
                 k_lim = int(0.9 * k_signal)
                 warn(f'k_lim is adjusted to signal length: {k_lim}.')
-                print('k_lim =', k_lim)
+                # print('k_lim =', k_lim)
             
             num_k = k_lim - self.k_lo + 1
             if num_k < self.num_k:

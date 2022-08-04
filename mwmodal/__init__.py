@@ -1,2 +1,2 @@
-__version__ = '0.42'
+__version__ = '0.4.3'
 from .mw_modal import *
