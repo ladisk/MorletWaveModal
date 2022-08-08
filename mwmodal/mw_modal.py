@@ -53,82 +53,161 @@ class MorletWaveModal(object):
         self.identifier_morlet_wave = mw.MorletWave(free_response, fs)
         return None
 
-    def initialize_identification(self, omega, damping_estimated=0.0025, chk_damping=True):
+    # def initialize_identification(self, omega, damping_estimated=0.0025, chk_damping=True):
+    #     """
+    #     Estimates `k_lim` and distributes `k` values in range for selected mode `omega`.
+
+    #     Method performs distribution of `k` values in range `10 - k_lim`.
+    #     The `k_lim` is determined according to `damping_estimated` and it is
+    #     checked against signal length, if it is larger then `k_signal` then
+    #     it is adjusted to signal, but not above 400. If `chk_damping` is
+    #     enabled, estimated damping is verified and if higher then 0.0025 
+    #     `k_lim` is adjusted to identified damping.
+
+    #     :param omega: roughly estimated natural circular frequency
+    #     :param damping_estimated: estimated damping ratio
+    #     :chk_damping: enables/disables verification of estimated damping ratio
+    #     :return:
+    #     """
+    #     self.k_hi = None # legacy: prevents k distribution in identify_natural_frequency()
+
+    #     N_ef = self.free_response.size0
+    #     k_signal = int(omega * N_ef / (2*np.pi*self.fs))
+    #     k_lim = int(k_limit_theoretical(self.n_1, damping_estimated) * 1)
+    #     # print('k_lim =', k_lim)
+    #     if k_lim > 400:
+    #         k_lim = 400
+    #         # print('k_lim corrected to 400!')
+
+    #     if k_lim > k_signal:
+    #         k_lim = int(0.9 * k_signal)
+    #         warn(f'k_lim is adjusted to signal length: {k_lim}.')
+    #         # print('k_lim =', k_lim)
+
+    #     num_k = k_lim - self.k_lo + 1
+    #     if num_k < self.num_k:
+    #         if num_k < 3:
+    #             raise Exception('num_k is too large. Extend k_lo-k_hi range.')
+    #         else:
+    #             raise Exception(f'num_k is too large. Extend k_lo-k_hi range or set k_num to {num_k}.')
+
+    #     self.k = np.linspace(self.k_lo, k_lim, self.num_k, dtype=int)
+    #     # self.k_hi_used = k_lim # 1.
+    #     if chk_damping:
+    #         self.find_natural_frequencies(omega)
+    #         try:
+    #             self.morlet_wave_integrate(True)
+    #         except Exception:
+    #             raise Exception('Increase estimated damping or reduce signal length.')
+            
+    #         damping_test = self.identify_damping()
+    #         # print(damping_test)
+    #         if damping_test <= 0.0025:
+    #             k_lim = 400
+    #             # print('k_lim set to 400!')
+    #         else:
+    #             k_lim = int(k_limit_theoretical(self.n_1, damping_test) * 1)
+    #             print('k_lim =', k_lim)
+    #             if k_lim > 400:
+    #                 k_lim = 400
+    #                 # print('k_lim corrected to 400!')
+    #         if k_lim > k_signal:
+    #             k_lim = int(0.9 * k_signal)
+    #             warn(f'k_lim is adjusted to signal length: {k_lim}.')
+    #             # print('k_lim =', k_lim)
+            
+    #         num_k = k_lim - self.k_lo + 1
+    #         if num_k < self.num_k:
+    #             if num_k < 3:
+    #                 raise Exception('num_k is too large. Extend k_lo-k_hi range.')
+    #             else:
+    #                 raise Exception(f'num_k is too large. Extend k_lo-k_hi range or set k_num to {num_k}.')
+
+    #         self.k = np.linspace(self.k_lo, k_lim, self.num_k, dtype=int)
+    #         # self.k_hi_used = k_lim # 2.
+    #         self.omega_id = None
+    #     return None
+
+    def identify_modal_parameters(self, omega_estimated, damping_estimated=0.0025):
         """
-        Estimates `k_lim` and distributes `k` values in range for selected mode `omega`.
+        Wrapper method which performs identification of modal parameters for selected mode.
 
-        Method performs distribution of `k` values in range `10 - k_lim`.
-        The `k_lim` is determined according to `damping_estimated` and it is
-        checked against signal length, if it is larger then `k_signal` then
-        it is adjusted to signal, but not above 400. If `chk_damping` is
-        enabled, estimated damping is verified and if higher then 0.0025 
-        `k_lim` is adjusted to identified damping.
+        :param omega_estimated: initial natural circular frequency
+        :param damping_estimated: Damping ratio estimated for selected mode
+        :return omega_identified, delta_identified, amplitude_identified, phase_identified: 
+        """
+        test = True
+        while test:
+            ### Step #1 ###
+            self.initialization(omega_estimated, damping_estimated)
 
-        :param omega: roughly estimated natural circular frequency
-        :param damping_estimated: estimated damping ratio
-        :chk_damping: enables/disables verification of estimated damping ratio
+            ### Step #2 ###
+            omega_identified = self.identify_natural_frequency(omega_estimated)
+
+            ### Step #3 ###
+            damping_identified = self.identify_damping()
+
+            test_damping = np.isclose(damping_estimated, damping_identified, \
+                rtol=0.1, atol=0)
+            if damping_estimated < damping_identified and not test_damping:
+                warn(f'Estimated damping: {damping_estimated:.5} is smaller then ' \
+                    f'identified: {damping_identified:.5}. Returning to step #1.')
+                damping_estimated = damping_identified
+                omega_estimated = omega_identified
+            else:
+                test = False
+
+        if damping_estimated > damping_identified and not test_damping:
+            warn('Estimated damping is high, possible higher k_lim available.')
+
+        ### Step #4 ###
+        amplitude_identified, phase_identified = self.identify_amplitude_phase(damping_identified)
+
+        return omega_identified, damping_identified, amplitude_identified, phase_identified
+
+    def initialization(self, omega_estimated, damping_estimated):
+        """
+        Step #1: Selection of the estimated damping ratio, determination of `k_lim` and distribution of `k_j`
+
+        :param omega_estimated: initial natural circular frequency
+        :param damping_estimated: Damping ratio estimated for selected mode
         :return:
         """
         self.k_hi = None # legacy: prevents k distribution in identify_natural_frequency()
 
-        N_ef = self.free_response.size
-        k_signal = int(omega * N_ef / (2*np.pi*self.fs))
-        k_lim = int(k_limit_theoretical(self.n_1, damping_estimated) * 1)
-        # print('k_lim =', k_lim)
-        if k_lim > 400:
+        if self.damp_lim[0] <= damping_estimated < 0.0025:
             k_lim = 400
-            # print('k_lim corrected to 400!')
+        elif 0.0025 <= damping_estimated <= self.damp_lim[1]:
+            k_lim = int(k_limit_theoretical(self.n_1, damping_estimated) * 1)
+        elif self.damp_lim[0] > damping_estimated:
+            warn(f'Estimated damping {damping_estimated:.4f} is lower then limit {self.damp_lim[0]:.4f}, using limit.')
+            k_lim = 400
+        elif damping_estimated > self.damp_lim[1]:
+            warn(f'Estimated damping {damping_estimated:.4f} is higher then limit {self.damp_lim[1]:.4f}, using limit.')
+            k_lim = int(k_limit_theoretical(self.n_1, self.damp_lim[1]))
+        print('k_lim =', k_lim)
 
+        # test k_lim against signal length for the selected mode
+        n_signal = self.free_response.size
+        k_signal = get_k(omega_estimated, self.fs, n_signal, self.n_1)
+        print('k_signal =', k_signal)
         if k_lim > k_signal:
-            k_lim = int(0.9 * k_signal)
-            warn(f'k_lim is adjusted to signal length: {k_lim}.')
-            # print('k_lim =', k_lim)
+            warn(f'k_lim: {k_lim} exceeds signal length k_signal: {k_signal}. k_lim is adjusted to signal length.')
+            k_lim = k_signal
+        print('k_lim =', k_lim)
 
+        # check k_lo-k_hi range to avoid double k_j values.
         num_k = k_lim - self.k_lo + 1
         if num_k < self.num_k:
             if num_k < 3:
-                raise Exception('num_k is too large. Extend k_lo-k_hi range.')
+                raise Exception('Extend k_lo-k_hi range.')
             else:
                 raise Exception(f'num_k is too large. Extend k_lo-k_hi range or set k_num to {num_k}.')
 
         self.k = np.linspace(self.k_lo, k_lim, self.num_k, dtype=int)
-        self.k_hi_used = k_lim # 1.
-        if chk_damping:
-            self.find_natural_frequencies(omega)
-            try:
-                self.morlet_wave_integrate(True)
-            except Exception:
-                raise Exception('Increase estimated damping or reduce signal length.')
-            
-            damping_test = self.identify_damping()
-            # print(damping_test)
-            if damping_test <= 0.0025:
-                k_lim = 400
-                # print('k_lim set to 400!')
-            else:
-                k_lim = int(k_limit_theoretical(self.n_1, damping_test) * 1)
-                print('k_lim =', k_lim)
-                if k_lim > 400:
-                    k_lim = 400
-                    # print('k_lim corrected to 400!')
-            if k_lim > k_signal:
-                k_lim = int(0.9 * k_signal)
-                warn(f'k_lim is adjusted to signal length: {k_lim}.')
-                # print('k_lim =', k_lim)
-            
-            num_k = k_lim - self.k_lo + 1
-            if num_k < self.num_k:
-                if num_k < 3:
-                    raise Exception('num_k is too large. Extend k_lo-k_hi range.')
-                else:
-                    raise Exception(f'num_k is too large. Extend k_lo-k_hi range or set k_num to {num_k}.')
-
-            self.k = np.linspace(self.k_lo, k_lim, self.num_k, dtype=int)
-            self.k_hi_used = k_lim # 2.
-            self.omega_id = None
         return None
 
-    def identify_natural_frequency(self, omega, test=False):
+    def identify_natural_frequency(self, omega_estimated, test=False):
         """
         Searches for the natural frequencies in `k` values from range.
 
@@ -140,14 +219,14 @@ class MorletWaveModal(object):
         Natural frequency is determined by averaging frequencies obtained in
         `k` range.
 
-        :param omega: initial natural frequency
+        :param omega_estimated: initial natural circular frequency
         :param test: parameter passed to `morlet_wave_integrate()` method
         :return: identified natural frequency
         """
 
         if self.k_hi is not None:
             N_ef = self.free_response.size
-            k_max = int(omega * N_ef / (2*np.pi*self.fs))
+            k_max = int(omega_estimated * N_ef / (2*np.pi*self.fs))
             k_hi = self.k_hi
 
             if k_hi > k_max:
@@ -163,9 +242,9 @@ class MorletWaveModal(object):
                 # self.num_k = self.k_hi - self.k_lo + 1
 
             self.k = np.linspace(self.k_lo, k_hi, self.num_k, dtype=int)
-            self.k_hi_used = k_hi
+            # self.k_hi_used = k_hi
 
-        self.find_natural_frequencies(omega)
+        self.find_natural_frequencies(omega_estimated)
         self.morlet_wave_integrate(test)
 
         omega_identified = np.average(self.omega_id[self.mask], weights=self.k[self.mask])
@@ -205,7 +284,7 @@ class MorletWaveModal(object):
         if not(amplitude.success):
             raise Exception(f'Optimizer returned false for amplitude:\n{amplitude.message}.')
 
-        ######### Phase ###########
+        ########## Phase ############
         phi_tilde = -np.angle((-1)**(self.k[self.mask]) * self.integral[0, self.mask])
         phi_test = np.mean(phi_tilde)
         phase = least_squares(cost_fun_phase, x0=phi_test, method='trf', bounds=(-np.pi, np.pi), \
@@ -237,18 +316,17 @@ class MorletWaveModal(object):
         if self.omega_id is None:
             raise Exception(f'Natural frequencies not identified.')
 
-        N_hi = max_N(self.k[-1], np.min(self.omega_id), self.fs)
+        N_hi = get_number_of_samples(self.k[-1], np.min(self.omega_id), self.fs)
         N_k = self.k.size
         psi = np.zeros((N_hi, N_k), dtype=np.complex128)
         self.integral = np.zeros((2, N_k), dtype=np.complex128)
         for j, n_ in enumerate((self.n_1, self.n_2)):
             for i, k_ in enumerate(self.k):
-                psi_N = max_N(k_, self.omega_id[i], self.fs)
+                psi_N = get_number_of_samples(k_, self.omega_id[i], self.fs)
                 psi[:psi_N, i] = self.identifier_morlet_wave.morlet_wave(self.omega_id[i], n_, k_)
 
-            self.integral[j,] = \
-                np.trapz(np.einsum('i,ij->ij', self.free_response[:N_hi], np.conj(psi)), \
-                    dx=1/self.fs, axis=0)
+            temp = np.einsum('i,ij->ij', self.free_response[:N_hi], np.conj(psi))
+            self.integral[j,] = np.trapz(temp, dx=1/self.fs, axis=0)
                     
         self.integral_ratio = np.abs(self.integral[0]) / np.abs(self.integral[1])
         if test:
@@ -267,15 +345,15 @@ class MorletWaveModal(object):
         :param M_tilde: morlet integral ratios in `k` range.
         :return: mask which filters out values that do not satisfy set conditions.
         """
-        k_lim = k_limit_theoretical(self.n_1, self.damp_lim[1])
+        k_hi = self.k[-1]
         for i, k_ in enumerate(self.k):
-            if k_ <= k_lim:
+            if k_ <= k_limit_theoretical(self.n_1, self.damp_lim[1]):
                 test = self.identifier_morlet_wave.exact_mwdi_goal_function(self.damp_lim[1], 0, self.n_1, self.n_2, k_)
                 if M_tilde[i] > test:
                     M_tilde[i] = 1
-        d_lim = damping_limit_theoretical(self.n_1, self.k_hi_used)
+        d_lim = damping_limit_theoretical(self.n_1, k_hi)
         M_lim_lo = self.identifier_morlet_wave.exact_mwdi_goal_function(self.damp_lim[0], 0, self.n_1, self.n_2, self.k_lo)
-        M_lim_hi = self.identifier_morlet_wave.exact_mwdi_goal_function(d_lim, 0, self.n_1, self.n_2, self.k_hi_used)
+        M_lim_hi = self.identifier_morlet_wave.exact_mwdi_goal_function(d_lim, 0, self.n_1, self.n_2, k_hi)
         mask = np.logical_and(M_tilde > M_lim_lo, M_tilde < M_lim_hi)
         return mask
 
@@ -307,7 +385,7 @@ def k_limit_theoretical(n, d):
     kapa = n**2 / (8*np.pi*d)
     return int(kapa * np.sqrt(1 - d**2))
 
-def max_N(k, omega, fs):
+def get_number_of_samples(k, omega, fs):
     """
     Determines number of samples based on `k`, `omega` and `fs`.
 
@@ -317,6 +395,38 @@ def max_N(k, omega, fs):
     :return: number of samples (S)
     """
     return int(2 * k * np.pi / omega * fs) + 1
+
+def get_k(omega, fs, n_samples, n=0):
+    """
+    Determines number of oscillation for given parameters.
+
+    Time spread parameter `n` is added to account for frequency spread
+    when the optimizer seeks the natural frequency, see Eq.(14), because
+    if k_signal = k_lim will result in longer MW function then the signal.
+
+    :param omega: circular frequency of signal
+    :param fs: sampling frequency of signal in S/s.
+    :param n_samples: number of samples (S)
+    :param n: time spread parameter
+    :return: number of oscillations
+    """
+    k = int(omega * n_samples / (2 * np.pi * fs))
+    if n==0:
+        return k
+    else:
+        f_spread = frequency_spread_mw(omega, n, k)
+    return int((omega - f_spread) * n_samples / (2 * np.pi * fs))
+
+def frequency_spread_mw(omega, n, k):
+    """
+    Frequency spread of the Morlet-wave function, Eq.(12).
+
+    :param omega: circular frequency
+    :param n: time spread parameter
+    :param k: number of oscillations
+    :return: frequency spread in rad/s
+    """
+    return 0.25 * omega * n / (np.pi * k)
 
 def get_amplitude(k, n, damping_ratio, omega, I_tilde):
     """
@@ -388,7 +498,7 @@ if __name__ == "__main__":
     identifier = MorletWaveModal(free_response=free_response, fs=fs)
 
 # Identify natural frequency and damping
-    omega = identifier.identify_natural_frequency(omega=w+1)
+    omega = identifier.identify_natural_frequency(omega_estimated=w+1)
     damping = identifier.identify_damping()
     print(f'Natural frequency:\n\tTheorethical: {w/(2*np.pi)} Hz\n\tIdentified: {omega/(2*np.pi):.2f} Hz')
     print(f'Damping ratio:\n\tTheorethical: {damping_ratio*100}%\n\tIdentified: {damping*100:.4f}%')
