@@ -16,33 +16,21 @@ A simple example how to identify modal parameters using Morlet-Wave Modal packag
 
     # set time domain
     fs = 5000 # sampling frequency [Hz]
-    N = 5000 # number of data points of time signal
-    time = np.arange(N) / fs # time vector
+    T = 1 # signal duration [s]
+    time = np.arange(T*fs) / fs # time vector
 
     # generate a free response of a SDOF damped mechanical system
-    w_n = 2*np.pi * 100 # undamped natural frequency
+    w_d = 2*np.pi * 100 # damped natural frequency
     d = 0.01 # damping ratio
     x = 1 # amplitude
     phi = 0.3 # phase
-    response = x * np.exp(-d * w_n * time) * np.cos(w_n * np.sqrt(1 - d**2) * time - phi)
+    response = x * np.exp(-d * w_d / np.sqrt(1 - d**2) * time) * np.cos(w_d * time - phi)
 
     # set MorletWaveModal object identifier
     identifier = mwm.MorletWaveModal(free_response=response, fs=fs)
 
-    # Step one: Initialize identification
-    identifier.initialize_identification(w_n, damping_estimated=0.005)
-
-    # Step two: Identify natural frequency
-    omega = identifier.identify_natural_frequency(w_d)
-    print(omega)
-
-    # Step three: Identify damping
-    damp = identifier.identify_damping()
-    print(damp)
-
-    # Step four: Identify amplitude and phase
-    amp, pha = identifier.identify_amplitude_phase(damp)
-    print(amp, pha)
+    #  set initial natural frequency, estimate damping ratio and identify modal parameters
+    identifier.identify_modal_parameters(omega_estimated=w_n, damping_estimated=0.01)
 
 References
 ----------
