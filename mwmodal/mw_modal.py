@@ -104,13 +104,13 @@ class MorletWaveModal(object):
         if self.damp_lim[0] <= damping_estimated < 0.0025:
             k_lim = 400
         elif 0.0025 <= damping_estimated <= self.damp_lim[1]:
-            k_lim = int(k_limit_theoretical(self.n_1, damping_estimated) * 1)
+            k_lim = k_limit_theoretical(self.n_1, damping_estimated) * 1
         elif self.damp_lim[0] > damping_estimated:
             warn(f'Estimated damping {damping_estimated:.4f} is lower then limit {self.damp_lim[0]:.4f}, using limit.')
             k_lim = 400
         elif damping_estimated > self.damp_lim[1]:
             warn(f'Estimated damping {damping_estimated:.4f} is higher then limit {self.damp_lim[1]:.4f}, using limit.')
-            k_lim = int(k_limit_theoretical(self.n_1, self.damp_lim[1]))
+            k_lim = k_limit_theoretical(self.n_1, self.damp_lim[1])
         print('k_lim =', k_lim)
 
         # test k_lim against signal length for the selected mode
@@ -243,6 +243,10 @@ class MorletWaveModal(object):
             raise Exception(f'Natural frequencies not identified.')
 
         N_hi = get_number_of_samples(self.k[-1], np.min(self.omega_id), self.fs)
+        N_response = self.free_response.size
+        if N_hi > N_response:
+            raise Exception(f'Wave function is larger {N_hi} then signal {N_response}.\n' \
+                f'Omega: {np.around(self.omega_id, 1)}.\nPossible k_lo={self.k_lo} is too low, try increase.')
         N_k = self.k.size
         psi = np.zeros((N_hi, N_k), dtype=np.complex128)
         self.integral = np.zeros((2, N_k), dtype=np.complex128)
@@ -316,7 +320,7 @@ def get_k(omega, fs, n_samples, n=0):
         return k
     else:
         f_spread = frequency_spread_mw(omega, n, k)
-    return int((omega - f_spread) * n_samples / (2 * np.pi * fs))
+    return int((omega - f_spread) * n_samples / (2 * np.pi * fs)) - 1
 
 def frequency_spread_mw(omega, n, k):
     """
