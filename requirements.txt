@@ -1,5 +1,5 @@
 numpy
 scipy
-mwdi==0.71
+mwdi==0.72
 pylint
 pytest
