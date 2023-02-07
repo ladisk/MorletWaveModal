@@ -36,7 +36,9 @@ References
 ----------
 .. [1] J\. Slavič, M. Boltežar, Damping identification with the Morlet-wave, Mechanical Systems and Signal Processing, 25 (2011) 1632–1645, doi: `10.1016/j.ymssp.2011.01.008`_.
 
+
+.. image:: https://zenodo.org/badge/DOI/10.5281/zenodo.7002905.svg
+   :target: https://doi.org/10.5281/zenodo.7002905
+
 .. _NOSTRADAMUS: http://ladisk.si/?what=incfl&flnm=nostradamus.php
 .. _10.1016/j.ymssp.2011.01.008: https://doi.org/10.1016/j.ymssp.2011.01.008
-   
-
