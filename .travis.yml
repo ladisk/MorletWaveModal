@@ -1,0 +1,15 @@
+language: python
+python:
+  - 3.9
+matrix:
+  include:
+    - python: 3.8
+    - python: 3.9
+      dist: xenial
+      sudo: true
+before_install:
+  - pip install pip --upgrade
+install:
+  - pip install -r requirements.txt
+script:
+  - pytest
