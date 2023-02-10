@@ -42,3 +42,6 @@ References
 
 .. _NOSTRADAMUS: http://ladisk.si/?what=incfl&flnm=nostradamus.php
 .. _10.1016/j.ymssp.2011.01.008: https://doi.org/10.1016/j.ymssp.2011.01.008
+
+.. image:: https://github.com/ladisk/MorletWaveModal/actions/workflows/python-package.yml/badge.svg
+    :target: https://github.com/ladisk/MorletWaveModal/actions
