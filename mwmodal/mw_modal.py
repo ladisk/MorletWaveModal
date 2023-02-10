@@ -133,7 +133,7 @@ class MorletWaveModal(object):
         self.k = np.linspace(self.k_lo, k_lim, self.num_k, dtype=int)
         return None
 
-    def identify_natural_frequency(self, omega_estimated, test=False):
+    def identify_natural_frequency(self, omega_estimated):
         """
         Searches for the natural frequencies in `k` values from range.
 
@@ -146,7 +146,6 @@ class MorletWaveModal(object):
         `k` range.
 
         :param omega_estimated: initial natural circular frequency
-        :param test: parameter passed to `morlet_wave_integrate()` method
         :return: identified natural frequency
         """
 
@@ -179,6 +178,8 @@ class MorletWaveModal(object):
         :param damping: identified damping
         :return: identified amplitude and phase
         """
+        if self.omega_id is None:
+            raise Exception(f'Natural frequencies not identified.')
 
         ######### Amplitude #########
         amp_test = np.mean(get_amplitude(self.k, self.n_1, damping, \
