@@ -1,5 +1,6 @@
-numpy
-scipy
-mwdi==0.72
-pylint
+numpy>=2.0.0
+scipy>=1.0.0
+mwdi==0.73
+twine
+build
 pytest

@@ -5,9 +5,9 @@ This is a Python implementation of modal identification on Morlet-
 wave method, based on [1]_:
 
 .. [1] I. Tomac, J. Slavič, Modal Identification using Morlet-Wave,
-Mechanical Systems and Signal Processing. xx (202x) xx–xx.
-_doi: 10.1016/j.ymssp.20xx.xx.xx.
-.. _doi: https://doi.org/10.1016/j.ymssp.20xx.xx.xx
+Mechanical Systems and Signal Processing 192C (2023) 110243.
+_doi: 10.1016/j.ymssp.2023.110243
+.. _doi: https://authors.elsevier.com/sd/article/S0888-3270(23)00150-4
 
 Check web page of EU project `NOSTRADAMUS`_ for more info.
 .. _NOSTRADAMUS: http://ladisk.si/?what=incfl&flnm=nostradamus.php
@@ -48,7 +48,7 @@ class MorletWaveModal(object):
         self.k_lo = k_lo
         self.num_k = num_k
         self.omega_id = None
-        
+
         self.identifier_morlet_wave = mw.MorletWave(free_response, fs)
         return None
 
@@ -163,11 +163,14 @@ class MorletWaveModal(object):
         if self.omega_id is None:
             raise Exception(f'Natural frequencies not identified.')
 
-        damp = least_squares(self.identifier_morlet_wave.exact_mwdi_goal_function, \
-            x0=0.001, method='lm', \
-            args=(self.integral_ratio, self.n_1, self.n_2, self.k))
+        damp = least_squares(
+            self.identifier_morlet_wave.exact_mwdi_goal_function,
+            x0=0.001,
+            method='lm',
+            args=(self.integral_ratio, self.n_1, self.n_2, self.k)
+        )
 
-        if not(damp.success):
+        if not damp.success:
             raise Exception(f'Optimizer returned false:\n{damp.message}.')
         return damp.x[0]
 
@@ -182,20 +185,33 @@ class MorletWaveModal(object):
             raise Exception(f'Natural frequencies not identified.')
 
         ######### Amplitude #########
-        amp_test = np.mean(get_amplitude(self.k, self.n_1, damping, \
-                    self.omega_id, self.integral[0,]))
-        amplitude = least_squares(cost_fun_amplitude, x0=amp_test, method='lm', \
-                        args=(self.omega_id, damping, self.k, \
-                                self.n_1, np.abs(self.integral[0,])))
-        if not(amplitude.success):
+        amp_test = np.mean(get_amplitude(
+            self.k,
+            self.n_1,
+            damping,
+            self.omega_id,
+            self.integral[0,])
+        )
+        amplitude = least_squares(
+            cost_fun_amplitude,
+            x0=amp_test,
+            method='lm',
+            args=(self.omega_id, damping, self.k, self.n_1, np.abs(self.integral[0,]))
+        )
+        if not amplitude.success:
             raise Exception(f'Optimizer returned false for amplitude:\n{amplitude.message}.')
 
         ########## Phase ############
         phi_tilde = -np.angle((-1)**(self.k) * self.integral[0,])
         phi_test = np.mean(phi_tilde)
-        phase = least_squares(cost_fun_phase, x0=phi_test, method='trf', bounds=(-np.pi, np.pi), \
-                    args=(self.k, np.abs(np.tan(phi_test)), phi_tilde))
-        if not(phase.success):
+        phase = least_squares(
+            cost_fun_phase,
+            x0=phi_test,
+            method='trf',
+            bounds=(-np.pi, np.pi),
+            args=(self.k,np.abs(np.tan(phi_test)), phi_tilde)
+        )
+        if not phase.success:
             raise Exception(f'Optimizer returned false for phase:\nAmplitude: {amplitude.x[0]}\n{phase.message}.')
 
         return amplitude.x[0], phase.x[0]
@@ -207,7 +223,7 @@ class MorletWaveModal(object):
         :param omega: guessed circular natural frequency
         :return:
         """
-        self.omega_id = np.zeros_like(self.k, dtype=float)        
+        self.omega_id = np.zeros_like(self.k, dtype=float)
         for i, k_ in enumerate(self.k):
             self.omega_id[i] = self.identifier_morlet_wave.find_natural_frequency(omega, self.n_1, k_)
         return None
@@ -227,7 +243,7 @@ class MorletWaveModal(object):
         if N_hi > N_response:
             raise Exception(f'Wave function is larger {N_hi} then signal {N_response}.\n' \
                 f'Omega: {np.around(self.omega_id, 1)}.\nPossible k_lo={self.k_lo} is too low, try increase.')
-        
+
         N_k = self.k.size
         psi = np.zeros((N_hi, N_k), dtype=np.complex128)
         self.integral = np.zeros((2, N_k), dtype=np.complex128)
@@ -237,8 +253,8 @@ class MorletWaveModal(object):
                 psi[:psi_N, i] = self.identifier_morlet_wave.morlet_wave(self.omega_id[i], n_, k_)
 
             temp = np.einsum('i,ij->ij', self.free_response[:N_hi], np.conj(psi))
-            self.integral[j,] = np.trapz(temp, dx=1/self.fs, axis=0)
-                    
+            self.integral[j,] = np.trapezoid(temp, dx=1/self.fs, axis=0)
+
         self.integral_ratio = np.abs(self.integral[0]) / np.abs(self.integral[1])
 
         return None

@@ -1,0 +1,58 @@
+[build-system]
+requires = [
+    "hatchling",
+]
+build-backend = "hatchling.build"
+
+[project]
+name = "MorletWaveModal"
+version = "0.6.4"
+license = "MIT"
+description = "Morlet Wave Modal Identification."
+readme = "README.rst"
+keywords = [
+    "modal parameters",
+    "morlet-wave",
+    "identification",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=2.0.0",
+    "scipy>=1.0.0",
+    "mwdi==0.73"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering",
+    "Programming Language :: Python :: 3.10",
+    "License :: OSI Approved :: MIT License",
+]
+
+[[project.authors]]
+name = "Ivan Tomac, Janko Slavič"
+email = "itomac@fesb.hr"
+
+[[project.maintainers]]
+name = "Ivan Tomac, Janko Slavič"
+email = "itomac@fesb.hr"
+
+[project.optional-dependencies]
+dev = [
+    "twine",
+    "build",
+    "pytest",
+]
+
+[project.urls]
+homepage = "https://github.com/ladisk/MorletWaveModal"
+# documentation = "https://pyidi.readthedocs.io/en/latest/"
+source = "https://github.com/ladisk/MorletWaveModal"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
+[tool.hatch.build.targets.wheel]
+include = [
+    "mwmodal/*",
+]

@@ -1,8 +1,8 @@
 MWModal - Morlet-Wave Modal Identification 
 ------------------------------------------
-This is the Python implementation of the Morlet-Wave Modal identification method which is based on the [1]_.
+This is the Python implementation of the method based on the Morlet-wave integral, which is developed for identification of modal parameters from short, noisy and low-dynamic-range signals [1]_.
 
-This package is created within the MSCA IF project `NOSTRADAMUS`_.
+This package is created within the H2020-MSCA-IF-2020 project `NOSTRADAMUS`_.
 
 
 Simple example
@@ -34,14 +34,14 @@ A simple example how to identify modal parameters using Morlet-Wave Modal packag
 
 References
 ----------
-.. [1] J\. Slavič, M. Boltežar, Damping identification with the Morlet-wave, Mechanical Systems and Signal Processing, 25 (2011) 1632–1645, doi: `10.1016/j.ymssp.2011.01.008`_.
+.. [1] I\. Tomac, J. Slavič, Morlet-wave-based modal identification in the time domain, Mechanical Systems and Signal Processing 192C (2023) 110243, doi: `10.1016/j.ymssp.2023.110243`_.
 
 
-.. image:: https://zenodo.org/badge/DOI/10.5281/zenodo.7002905.svg
-   :target: https://doi.org/10.5281/zenodo.7002905
+.. image:: https://zenodo.org/badge/DOI/10.5281/zenodo.7002904.svg
+   :target: https://doi.org/10.5281/zenodo.7002904
 
 .. _NOSTRADAMUS: http://ladisk.si/?what=incfl&flnm=nostradamus.php
-.. _10.1016/j.ymssp.2011.01.008: https://doi.org/10.1016/j.ymssp.2011.01.008
+.. _10.1016/j.ymssp.2023.110243: https://authors.elsevier.com/sd/article/S0888-3270(23)00150-4
 
 .. image:: https://github.com/ladisk/MorletWaveModal/actions/workflows/python-package.yml/badge.svg
     :target: https://github.com/ladisk/MorletWaveModal/actions
